@@ -1,29 +1,39 @@
 package mr
 
-//
-// RPC definitions.
-//
-// remember to capitalize all names.
-//
+import (
+	"os"
+	"strconv"
+)
 
-import "os"
-import "strconv"
-
-//
-// example to show how to declare the arguments
-// and reply for an RPC.
-//
-
-type ExampleArgs struct {
-	X int
+type Task struct {
+	TaskType   TaskType
+	TaskId     int
+	ReducerNum int
+	FileSlice  []string // map一个文件对应一个文件，reduce是对应多个temp中间值文件
 }
 
-type ExampleReply struct {
-	Y int
-}
+type TaskArgs struct{}
 
-// Add your RPC definitions here.
+type TaskType int
+type Phase int
+type State int
 
+const (
+	MapTask TaskType = iota
+	ReduceTask
+	WaitTask
+	ExitTask
+)
+const (
+	MapPhase Phase = iota
+	ReducePhase
+	AllDone
+)
+const (
+	Waiting State = iota
+	Running
+	Done
+)
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
