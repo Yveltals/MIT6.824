@@ -203,9 +203,9 @@ func (c *Coordinator) makeMapTasks() {
 			State:   Waiting,
 			TaskPtr: &task,
 		}
-		tf, _ := c.TaskInfoMap[taskInfo.TaskPtr.TaskId]
-		if tf != nil {
-			fmt.Println("taskinfo repeated!")
+		_, exists := c.TaskInfoMap[taskInfo.TaskPtr.TaskId]
+		if exists {
+			fmt.Println("[ERROR] taskinfo repeated!")
 		} else {
 			c.TaskInfoMap[taskInfo.TaskPtr.TaskId] = &taskInfo
 		}
@@ -227,8 +227,8 @@ func (c *Coordinator) makeReduceTasks() {
 			State:   Waiting,
 			TaskPtr: &task,
 		}
-		tf, _ := c.TaskInfoMap[taskInfo.TaskPtr.TaskId]
-		if tf != nil {
+		_, exists := c.TaskInfoMap[taskInfo.TaskPtr.TaskId]
+		if exists {
 			fmt.Println("[ERROR] taskinfo repeated!")
 		} else {
 			c.TaskInfoMap[taskInfo.TaskPtr.TaskId] = &taskInfo
