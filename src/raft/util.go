@@ -51,3 +51,15 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
+
+func (rf *Raft) UpToDate(index int, term int) bool {
+	return rf.currentTerm < term || (rf.currentTerm == term && index >= len(rf.logs))
+}
+
+func min(num int, num1 int) int {
+	if num > num1 {
+		return num1
+	} else {
+		return num
+	}
+}
