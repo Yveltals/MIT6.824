@@ -21,7 +21,7 @@ import (
 // (much more than the paper's range of timeouts).
 const RaftElectionTimeout = 1000 * time.Millisecond
 
-func TestInitialElection2E(t *testing.T) {
+func TestInitialElection2A(t *testing.T) {
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -52,7 +52,7 @@ func TestInitialElection2E(t *testing.T) {
 	cfg.end()
 }
 
-func TestReElection2E(t *testing.T) {
+func TestReElection2A(t *testing.T) {
 	servers := 3
 	cfg := make_config(t, servers, false, false)
 	defer cfg.cleanup()
@@ -120,7 +120,7 @@ func TestManyElections2A(t *testing.T) {
 		cfg.connect(i1)
 		cfg.connect(i2)
 		cfg.connect(i3)
-		fmt.Println("===================")
+		fmt.Printf("Reconnect: %v %v %v\n", i1, i2, i3)
 	}
 
 	cfg.checkOneLeader()

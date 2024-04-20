@@ -171,6 +171,7 @@ type RequestVoteReply struct {
 	// Your data here (2A).
 	Term        int  //currentTerm, for candidate to update itself
 	VoteGranted bool //true means candidate received vote
+	// Id          int    // rf.i (debug)
 }
 
 type AppendEntriesArgs struct {
@@ -200,7 +201,9 @@ func (rf *Raft) candidateRequestVote() {
 				Term:         rf.currentTerm,
 				CandidateId:  rf.me,
 				LastLogIndex: len(rf.logs),
-				LastLogTerm:  0, //TODO
+			}
+			if len(rf.logs) > 0 {
+				args.LastLogTerm = rf.logs[len(rf.logs)-1].Term
 			}
 			rf.mu.Unlock()
 			reply := RequestVoteReply{}
@@ -208,7 +211,7 @@ func (rf *Raft) candidateRequestVote() {
 			if !ok {
 				return
 			}
-
+			// fmt.Printf("[Return-Rf(%v)] arg:%+v, reply:%+v\n", rf.me, args, reply)
 			rf.mu.Lock()
 			//Note: 只要还是 Candidate, rpc返回后Term只可能不变或增大(非法)
 			//除非一种情况: Candidate->Follwer(term减小)->Candidate
@@ -219,6 +222,7 @@ func (rf *Raft) candidateRequestVote() {
 			}
 			// rf.currentTerm == args.Term
 			if reply.Term > args.Term {
+				fmt.Printf("[RF(%v)]  ->  follwer", rf.me)
 				rf.status = Follower
 				rf.votedFor = -1
 				rf.votedSupport = 0
@@ -241,8 +245,8 @@ func (rf *Raft) candidateRequestVote() {
 					rf.matchIndex = make([]int, len(rf.peers))
 					rf.matchIndex[rf.me] = len(rf.logs)
 				}
-				rf.mu.Unlock()
 			}
+			rf.mu.Unlock()
 		}(i)
 	}
 }
@@ -252,6 +256,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	defer rf.mu.Unlock()
 	reply.Term = rf.currentTerm
 	reply.VoteGranted = false
+	// reply.Id = rf.me
 
 	// 收到新任期的拉票就重置，如果是 Candidate 需回归 Follower 状态
 	if rf.currentTerm < args.Term {
@@ -269,11 +274,13 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if len(rf.logs) > 0 {
 		lastLogTerm := rf.logs[len(rf.logs)-1].Term
 		if lastLogTerm > args.LastLogTerm || lastLogTerm == args.LastLogTerm && len(rf.logs) > args.LastLogIndex {
+			// fmt.Printf("\n%v > %v\n", lastLogTerm, args.LastLogTerm)
 			return
 		}
 	}
 	// votedFor is null or candidateId
 	if rf.votedFor != -1 || rf.votedFor == args.CandidateId {
+		// fmt.Println("\nVoted")
 		return
 	}
 	// 满足投票条件
@@ -325,6 +332,7 @@ func (rf *Raft) leaderAppendEntries() {
 					return
 				}
 				if reply.Term > rf.currentTerm {
+					fmt.Printf("[Rf(%v)] ---> follwer\n", rf.me)
 					rf.status = Follower
 					rf.currentTerm = reply.Term
 					rf.votedFor = -1
@@ -427,7 +435,7 @@ func (rf *Raft) electionTicker() {
 			rf.votedFor = rf.me
 			rf.votedSupport = 1
 
-			fmt.Printf("[++++ elect ++++] :Rf[%v] send a election\n", rf.me)
+			fmt.Printf("[++++ elect ++++]: Rf[%v] send a election\n", rf.me)
 			rf.candidateRequestVote()
 			rf.votedTime = time.Now()
 		}
@@ -507,7 +515,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 
 func (rf *Raft) Kill() {
 	atomic.StoreInt32(&rf.dead, 1)
-	fmt.Printf("[Kill] Rf(%v)", rf.me)
 }
 
 func (rf *Raft) killed() bool {
