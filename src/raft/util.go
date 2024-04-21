@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"log"
 )
 
@@ -51,11 +52,67 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
-
-func (rf *Raft) UpToDate(index int, term int) bool {
-	return rf.currentTerm < term || (rf.currentTerm == term && index >= len(rf.logs))
+func (rf *Raft) sendSnapShot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
+	ok := rf.peers[server].Call("Raft.InstallSnapShot", args, reply)
+	return ok
 }
 
+// 既然candidate term不落后, 那么其log的term是否更新? 若term相同则的index是否更新?
+func (rf *Raft) isLogUpToDate(term int, index int) bool {
+	lastIndex := rf.getLastIndex()
+	lastTerm := rf.getLastTerm()
+	return term > lastTerm || (term == lastTerm && index >= lastIndex)
+	// if len(rf.logs) > 0 {
+	// 	lastLogTerm := rf.logs[len(rf.logs)-1].Term
+	// 	if lastLogTerm > term || lastLogTerm == term && len(rf.logs) > index {
+	// 		// fmt.Printf("\n%v > %v\n", lastLogTerm, args.LastLogTerm)
+	// 		return false
+	// 	}
+	// }
+	// return true
+}
+
+// 通过快照偏移还原真实日志条目
+// curIndex - rf.lastIncludeIndex >= 1
+func (rf *Raft) restoreLog(curIndex int) LogEntry {
+	return rf.logs[curIndex-rf.lastIncludeIndex-1]
+}
+
+// 通过快照偏移还原真实日志任期
+func (rf *Raft) restoreLogTerm(curIndex int) int {
+	// 如果当前index与快照一致/日志为空，直接返回快照/快照初始化信息，否则根据快照计算
+	if curIndex-rf.lastIncludeIndex < 0 {
+		fmt.Printf("FUCK!!!!!!!! %v %v\n", curIndex, rf.lastIncludeIndex)
+	}
+	if curIndex == rf.lastIncludeIndex {
+		return rf.lastIncludeTerm
+	}
+	//fmt.Printf("[GET] curIndex:%v,rf.lastIncludeIndex:%v\n", curIndex, rf.lastIncludeIndex)
+	return rf.restoreLog(curIndex).Term
+}
+
+// 获取最后的快照日志的index(代表已存储）
+func (rf *Raft) getLastIndex() int {
+	return len(rf.logs) + rf.lastIncludeIndex
+}
+
+// 获取最后的任期(快照版本
+func (rf *Raft) getLastTerm() int {
+	if len(rf.logs) == 0 {
+		return rf.lastIncludeTerm
+	} else {
+		return rf.logs[len(rf.logs)-1].Term
+	}
+}
+func (rf *Raft) getPrevLogInfo(server int) (int, int) {
+	newEntryBeginIndex := rf.nextIndex[server] - 1
+	lastIndex := rf.getLastIndex()
+	if newEntryBeginIndex == lastIndex {
+		// fmt.Printf("\nAAAAAAAAA %v %v\n", newEntryBeginIndex, lastIndex)
+		// newEntryBeginIndex = lastIndex - 1
+	}
+	return newEntryBeginIndex, rf.restoreLogTerm(newEntryBeginIndex)
+}
 func min(num int, num1 int) int {
 	if num > num1 {
 		return num1
