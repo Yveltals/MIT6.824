@@ -18,14 +18,14 @@ package raft
 //
 
 import (
-	//	"bytes"
+	"bytes"
 	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	//	"6.824/labgob"
+	"6.824/labgob"
 	"6.824/labrpc"
 )
 
@@ -104,39 +104,36 @@ func (rf *Raft) GetState() (int, bool) {
 //
 // save Raft's persistent state to stable storage,
 // where it can later be retrieved after a crash and restart.
-// see paper's Figure 2 for a description of what should be persistent.
+// called after [currentTerm, votedFor, logs] change
 //
 func (rf *Raft) persist() {
-	// Your code here (2C).
-	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.logs)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
-//
-// restore previously persisted state.
-//
 func (rf *Raft) readPersist(data []byte) {
 	if data == nil || len(data) < 1 { // bootstrap without any state?
 		return
 	}
-	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var votedFor int
+	var logs []LogEntry
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&logs) != nil {
+		fmt.Println("decode error")
+	} else {
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.logs = logs
+	}
 }
 
 //
@@ -171,7 +168,7 @@ type RequestVoteReply struct {
 	// Your data here (2A).
 	Term        int  //currentTerm, for candidate to update itself
 	VoteGranted bool //true means candidate received vote
-	// Id          int    // rf.i (debug)
+	Id          int  // rf.i (debug)
 }
 
 type AppendEntriesArgs struct {
@@ -211,7 +208,7 @@ func (rf *Raft) candidateRequestVote() {
 			if !ok {
 				return
 			}
-			// fmt.Printf("[Return-Rf(%v)] arg:%+v, reply:%+v\n", rf.me, args, reply)
+			fmt.Printf("[Return-Rf(%v)] arg:%+v, reply:%+v\n", rf.me, args, reply)
 			rf.mu.Lock()
 			//Note: 只要还是 Candidate, rpc返回后Term只可能不变或增大(非法)
 			//除非一种情况: Candidate->Follwer(term减小)->Candidate
@@ -222,22 +219,21 @@ func (rf *Raft) candidateRequestVote() {
 			}
 			// rf.currentTerm == args.Term
 			if reply.Term > args.Term {
-				fmt.Printf("[RF(%v)]  ->  follwer", rf.me)
+				fmt.Printf("[RF(%v)]  ->  follwer\n", rf.me)
 				rf.status = Follower
 				rf.votedFor = -1
 				rf.votedSupport = 0
 				rf.currentTerm = reply.Term
+				rf.persist()
 				rf.mu.Unlock()
 				return
 			}
 			if reply.VoteGranted {
 				rf.votedSupport += 1
 				if rf.votedSupport > len(rf.peers)/2 {
-					fmt.Println("选主成功：", rf.me, " Term: ", rf.currentTerm)
+					fmt.Printf("选主成功：%v  Term %v\n", rf.me, rf.currentTerm)
 					rf.status = Leader
-					rf.votedFor = -1
 					rf.votedSupport = 0
-					rf.votedTime = time.Now()
 					rf.nextIndex = make([]int, len(rf.peers))
 					for i := 0; i < len(rf.peers); i++ {
 						rf.nextIndex[i] = len(rf.logs) + 1 //TODO
@@ -256,14 +252,16 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	defer rf.mu.Unlock()
 	reply.Term = rf.currentTerm
 	reply.VoteGranted = false
-	// reply.Id = rf.me
+	reply.Id = rf.me
 
 	// 收到新任期的拉票就重置，如果是 Candidate 需回归 Follower 状态
 	if rf.currentTerm < args.Term {
 		rf.votedFor = -1
 		rf.votedSupport = 0
 		rf.currentTerm = args.Term
+		rf.persist()
 		rf.status = Follower
+		fmt.Println("重置选票")
 	}
 	// 比较 raft term 的优先级最高
 	if rf.currentTerm > args.Term {
@@ -279,15 +277,15 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		}
 	}
 	// votedFor is null or candidateId
-	if rf.votedFor != -1 || rf.votedFor == args.CandidateId {
-		// fmt.Println("\nVoted")
+	if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
+		rf.votedFor = args.CandidateId
+		rf.currentTerm = args.Term
+		rf.persist()
+		rf.votedTime = time.Now()
+		reply.VoteGranted = true
+		reply.Term = rf.currentTerm
 		return
 	}
-	// 满足投票条件
-	rf.votedFor = args.CandidateId
-	rf.currentTerm = args.Term
-	rf.votedTime = time.Now()
-	reply.VoteGranted = true
 }
 
 //=============================== 日志增量部分 =====================================
@@ -336,8 +334,9 @@ func (rf *Raft) leaderAppendEntries() {
 					rf.status = Follower
 					rf.currentTerm = reply.Term
 					rf.votedFor = -1
+					rf.persist()
 					rf.votedSupport = 0
-					rf.votedTime = time.Now()
+					// rf.votedTime = time.Now() //remove?
 					return
 				}
 				if reply.Success {
@@ -356,7 +355,7 @@ func (rf *Raft) leaderAppendEntries() {
 								sum += 1
 							}
 						}
-						if sum > len(rf.peers)/2 {
+						if sum > len(rf.peers)/2 && rf.logs[index-1].Term == rf.currentTerm {
 							rf.commitIndex = index
 							break
 						}
@@ -380,15 +379,17 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	reply.Success = false
 	reply.Term = rf.currentTerm
 	reply.NextIndex = -1
-	if args.Term < rf.currentTerm {
+	if rf.currentTerm > args.Term {
 		return
 	}
 	rf.status = Follower
 	rf.currentTerm = args.Term
-	rf.votedFor = -1
+	if rf.currentTerm < args.Term || rf.votedFor != args.LeaderId {
+		rf.votedFor = -1
+	}
+	rf.persist()
 	rf.votedSupport = 0
 	rf.votedTime = time.Now()
-
 	// 自身的快照Index比发过来的prevLogIndex还大
 	if rf.lastApplied > args.PrevLogIndex {
 		reply.NextIndex = rf.lastApplied + 1
@@ -402,8 +403,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	reply.Success = true
 	//If an existing entry conflicts with a new one (same index but different terms)
 	//delete the existing entry and all that follow it
+	//TODO!!!!
 	rf.logs = append(rf.logs[:args.PrevLogIndex], args.Entries...)
-
+	rf.persist()
 	if args.LeaderCommit > rf.commitIndex {
 		rf.commitIndex = min(args.LeaderCommit, len(rf.logs))
 	}
@@ -412,7 +414,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 //=============================== 定时任务 =====================================
 func (rf *Raft) appendTicker() {
 	for !rf.killed() {
-		time.Sleep(time.Millisecond * 50) // 35
+		time.Sleep(time.Millisecond * 100) // 35
 		rf.mu.Lock()
 		if rf.status == Leader {
 			rf.mu.Unlock()
@@ -426,7 +428,7 @@ func (rf *Raft) electionTicker() {
 	rand.Seed(time.Now().UnixNano())
 	for !rf.killed() {
 		curTime := time.Now()
-		time.Sleep(time.Millisecond * time.Duration(rand.Intn(150)+150)) // 100 75
+		time.Sleep(time.Millisecond * time.Duration(rand.Intn(150)+300)) // 100 75
 
 		rf.mu.Lock()
 		if rf.votedTime.Before(curTime) && rf.status != Leader {
@@ -434,10 +436,10 @@ func (rf *Raft) electionTicker() {
 			rf.currentTerm += 1
 			rf.votedFor = rf.me
 			rf.votedSupport = 1
-
+			rf.persist()
 			fmt.Printf("[++++ elect ++++]: Rf[%v] send a election\n", rf.me)
-			rf.candidateRequestVote()
 			rf.votedTime = time.Now()
+			rf.candidateRequestVote()
 		}
 		rf.mu.Unlock()
 	}
@@ -451,7 +453,7 @@ func (rf *Raft) committedTicker() {
 			continue
 		}
 		messages := make([]ApplyMsg, 0)
-		for rf.lastApplied < rf.commitIndex {
+		for rf.lastApplied < rf.commitIndex && rf.lastApplied < len(rf.logs) {
 			rf.lastApplied += 1
 			messages = append(messages, ApplyMsg{
 				CommandValid: true,
@@ -510,6 +512,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		return -1, -1, false
 	}
 	rf.logs = append(rf.logs, LogEntry{Term: rf.currentTerm, Command: command})
+	rf.persist()
 	return len(rf.logs), rf.currentTerm, true
 }
 
