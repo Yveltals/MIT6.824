@@ -61,18 +61,10 @@ func (rf *Raft) isLogUpToDate(term int, index int) bool {
 	lastIndex := rf.getLastIndex()
 	lastTerm := rf.getLastTerm()
 	return term > lastTerm || (term == lastTerm && index >= lastIndex)
-	// if len(rf.logs) > 0 {
-	// 	lastLogTerm := rf.logs[len(rf.logs)-1].Term
-	// 	if lastLogTerm > term || lastLogTerm == term && len(rf.logs) > index {
-	// 		// fmt.Printf("\n%v > %v\n", lastLogTerm, args.LastLogTerm)
-	// 		return false
-	// 	}
-	// }
-	// return true
 }
 
 // 通过快照偏移还原真实日志条目
-// curIndex - rf.lastIncludeIndex >= 1
+// [NOTE] index - lastIncludeIndex >= 1
 func (rf *Raft) restoreLog(curIndex int) LogEntry {
 	return rf.logs[curIndex-rf.lastIncludeIndex-1]
 }
@@ -84,7 +76,6 @@ func (rf *Raft) restoreLogTerm(curIndex int) int {
 	if curIndex == rf.lastIncludeIndex {
 		return rf.lastIncludeTerm
 	}
-	//fmt.Printf("[GET] curIndex:%v,rf.lastIncludeIndex:%v\n", curIndex, rf.lastIncludeIndex)
 	return rf.restoreLog(curIndex).Term
 }
 
@@ -101,14 +92,7 @@ func (rf *Raft) getLastTerm() int {
 		return rf.logs[len(rf.logs)-1].Term
 	}
 }
-func (rf *Raft) getPrevLogInfo(server int) (int, int) {
-	prevLogIndex := rf.nextIndex[server] - 1
-	// if newEntryBeginIndex == rf.getLastIndex() {
-	// 	fmt.Printf("\nAAAAAAAAA %v %v\n", newEntryBeginIndex, rf.getLastIndex())
-	// 	newEntryBeginIndex = rf.getLastIndex() - 1
-	// }
-	return prevLogIndex, rf.restoreLogTerm(prevLogIndex)
-}
+
 func min(num int, num1 int) int {
 	if num > num1 {
 		return num1
