@@ -66,51 +66,6 @@ type LogEntry struct {
 	Term    int // entry was received by leader, first index is 1
 }
 
-// save Raft's persistent state to stable storage
-// called after [currentTerm, votedFor, logs] change
-func (rf *Raft) persistData() []byte {
-	w := new(bytes.Buffer)
-	e := labgob.NewEncoder(w)
-	e.Encode(rf.currentTerm)
-	e.Encode(rf.votedFor)
-	e.Encode(rf.logs)
-	e.Encode(rf.lastIncludeIndex)
-	e.Encode(rf.lastIncludeTerm)
-	data := w.Bytes()
-	DPrintf("RaftNode[%d] persist starts, currentTerm[%d] voteFor[%d] log[%v]\n", rf.me, rf.currentTerm, rf.votedFor, rf.logs)
-	return data
-}
-func (rf *Raft) persist() {
-	data := rf.persistData()
-	rf.persister.SaveRaftState(data)
-}
-
-func (rf *Raft) readPersist(data []byte) {
-	if data == nil || len(data) < 1 { // bootstrap without any state?
-		return
-	}
-	r := bytes.NewBuffer(data)
-	d := labgob.NewDecoder(r)
-	var currentTerm int
-	var votedFor int
-	var logs []LogEntry
-	var lastIncludeIndex int
-	var lastIncludeTerm int
-	if d.Decode(&currentTerm) != nil ||
-		d.Decode(&votedFor) != nil ||
-		d.Decode(&logs) != nil ||
-		d.Decode(&lastIncludeIndex) != nil ||
-		d.Decode(&lastIncludeTerm) != nil {
-		DPrintf("decode error")
-	} else {
-		rf.currentTerm = currentTerm
-		rf.votedFor = votedFor
-		rf.logs = logs
-		rf.lastIncludeIndex = lastIncludeIndex
-		rf.lastIncludeTerm = lastIncludeTerm
-	}
-}
-
 type RequestVoteArgs struct {
 	Term         int //candidate's term
 	CandidateId  int //candidate requesting vote
@@ -362,6 +317,53 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.logs = append(rf.logs[:args.PrevLogIndex-rf.lastIncludeIndex], args.Entries...)
 	if args.LeaderCommit > rf.commitIndex {
 		rf.commitIndex = min(args.LeaderCommit, rf.getLastIndex())
+	}
+}
+
+//=============================== 持久化部分 ===============================
+
+// save Raft's persistent state to stable storage
+// called after [currentTerm, votedFor, logs] change
+func (rf *Raft) persistData() []byte {
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.logs)
+	e.Encode(rf.lastIncludeIndex)
+	e.Encode(rf.lastIncludeTerm)
+	data := w.Bytes()
+	DPrintf("RaftNode[%d] persist starts, currentTerm[%d] voteFor[%d] log[%v]\n", rf.me, rf.currentTerm, rf.votedFor, rf.logs)
+	return data
+}
+func (rf *Raft) persist() {
+	data := rf.persistData()
+	rf.persister.SaveRaftState(data)
+}
+
+func (rf *Raft) readPersist(data []byte) {
+	if data == nil || len(data) < 1 { // bootstrap without any state?
+		return
+	}
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var votedFor int
+	var logs []LogEntry
+	var lastIncludeIndex int
+	var lastIncludeTerm int
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&logs) != nil ||
+		d.Decode(&lastIncludeIndex) != nil ||
+		d.Decode(&lastIncludeTerm) != nil {
+		DPrintf("decode error")
+	} else {
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.logs = logs
+		rf.lastIncludeIndex = lastIncludeIndex
+		rf.lastIncludeTerm = lastIncludeTerm
 	}
 }
 
