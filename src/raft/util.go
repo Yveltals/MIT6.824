@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"fmt"
 	"log"
 )
 
@@ -79,11 +78,9 @@ func (rf *Raft) restoreLog(curIndex int) LogEntry {
 }
 
 // 通过快照偏移还原真实日志任期
+// [NOTE] index >= rf.lastIncludeIndex
 func (rf *Raft) restoreLogTerm(curIndex int) int {
 	// 如果当前index与快照一致/日志为空，直接返回快照/快照初始化信息，否则根据快照计算
-	if curIndex-rf.lastIncludeIndex < 0 {
-		fmt.Printf("FUCK!!!!!!!! %v %v\n", curIndex, rf.lastIncludeIndex)
-	}
 	if curIndex == rf.lastIncludeIndex {
 		return rf.lastIncludeTerm
 	}
@@ -105,13 +102,12 @@ func (rf *Raft) getLastTerm() int {
 	}
 }
 func (rf *Raft) getPrevLogInfo(server int) (int, int) {
-	newEntryBeginIndex := rf.nextIndex[server] - 1
-	lastIndex := rf.getLastIndex()
-	if newEntryBeginIndex == lastIndex {
-		// fmt.Printf("\nAAAAAAAAA %v %v\n", newEntryBeginIndex, lastIndex)
-		// newEntryBeginIndex = lastIndex - 1
-	}
-	return newEntryBeginIndex, rf.restoreLogTerm(newEntryBeginIndex)
+	prevLogIndex := rf.nextIndex[server] - 1
+	// if newEntryBeginIndex == rf.getLastIndex() {
+	// 	fmt.Printf("\nAAAAAAAAA %v %v\n", newEntryBeginIndex, rf.getLastIndex())
+	// 	newEntryBeginIndex = rf.getLastIndex() - 1
+	// }
+	return prevLogIndex, rf.restoreLogTerm(prevLogIndex)
 }
 func min(num int, num1 int) int {
 	if num > num1 {

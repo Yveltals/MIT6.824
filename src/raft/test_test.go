@@ -107,7 +107,6 @@ func TestManyElections2A(t *testing.T) {
 		i1 := rand.Int() % servers
 		i2 := rand.Int() % servers
 		i3 := rand.Int() % servers
-		fmt.Printf("Disconnect: %v %v %v\n", i1, i2, i3)
 		cfg.disconnect(i1)
 		cfg.disconnect(i2)
 		cfg.disconnect(i3)
@@ -115,12 +114,10 @@ func TestManyElections2A(t *testing.T) {
 		// either the current leader should still be alive,
 		// or the remaining four should elect a new one.
 		cfg.checkOneLeader()
-		fmt.Printf("[%v] Check Pass\n", ii)
 
 		cfg.connect(i1)
 		cfg.connect(i2)
 		cfg.connect(i3)
-		fmt.Printf("Reconnect: %v %v %v\n", i1, i2, i3)
 	}
 
 	cfg.checkOneLeader()
@@ -848,7 +845,6 @@ func TestFigure82Z(t *testing.T) {
 
 		if leader != -1 {
 			cfg.crash1(leader)
-			fmt.Println("KILL ", leader)
 			nup -= 1
 		}
 

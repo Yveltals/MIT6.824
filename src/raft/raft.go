@@ -183,7 +183,7 @@ func (rf *Raft) candidateRequestVote() {
 			if !ok {
 				return
 			}
-			fmt.Printf("[Return-Rf(%v)] arg:%+v, reply:%+v\n", rf.me, args, reply)
+			// fmt.Printf("[Return-Rf(%v)] arg:%+v, reply:%+v\n", rf.me, args, reply)
 			rf.mu.Lock()
 			//Note: 只要还是 Candidate, rpc返回后Term只可能不变或增大(非法)
 			//除非一种情况: Candidate->Follwer(term减小)->Candidate
@@ -194,7 +194,7 @@ func (rf *Raft) candidateRequestVote() {
 			}
 			// 以下 rf.currentTerm == args.Term 成立
 			if reply.Term > args.Term {
-				fmt.Printf("[RF(%v)]  ->  follwer\n", rf.me)
+				// fmt.Printf("[RF(%v)]  ->  follwer\n", rf.me)
 				rf.status = Follower
 				rf.currentTerm, rf.votedFor = reply.Term, -1
 				rf.persist()
@@ -204,7 +204,7 @@ func (rf *Raft) candidateRequestVote() {
 			if reply.VoteGranted {
 				rf.votedSupport += 1
 				if rf.votedSupport > len(rf.peers)/2 {
-					fmt.Printf("选主成功：%v  Term %v\n", rf.me, rf.currentTerm)
+					// fmt.Printf("选主成功：%v  Term %v\n", rf.me, rf.currentTerm)
 					rf.status = Leader
 					//TODO send heartbeats
 					rf.nextIndex = make([]int, len(rf.peers))
@@ -234,7 +234,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if rf.currentTerm < args.Term {
 		rf.currentTerm, rf.votedFor = args.Term, -1
 		rf.status = Follower
-		fmt.Println("重置选票")
+		// fmt.Println("重置选票")
 	}
 	// candidate’s log is at least as up-to-date as receiver’s log
 	if !rf.isLogUpToDate(args.LastLogTerm, args.LastLogIndex) {
@@ -263,6 +263,7 @@ func (rf *Raft) leaderAppendEntries() {
 				rf.mu.Unlock()
 				return
 			}
+			// rf.nextIndex[server]-1 < rf.lastIncludeIndex
 			if rf.nextIndex[server]-1 < rf.lastIncludeIndex {
 				go rf.leaderSendSnapShot(server)
 				rf.mu.Unlock()
@@ -292,7 +293,7 @@ func (rf *Raft) leaderAppendEntries() {
 					return
 				}
 				if reply.Term > rf.currentTerm {
-					fmt.Printf("[Rf(%v)] ---> follwer\n", rf.me)
+					// fmt.Printf("[Rf(%v)] ---> follwer\n", rf.me)
 					rf.status = Follower
 					rf.currentTerm = reply.Term
 					rf.votedFor = -1
@@ -317,7 +318,7 @@ func (rf *Raft) leaderAppendEntries() {
 								sum += 1
 							}
 						}
-						if sum > len(rf.peers)/2 && rf.restoreLogTerm(index) == rf.currentTerm {
+						if sum > len(rf.peers)/2 && index >= rf.lastIncludeIndex && rf.restoreLogTerm(index) == rf.currentTerm {
 							rf.commitIndex = index
 							break
 						}
@@ -538,7 +539,7 @@ func (rf *Raft) electionTicker() {
 			rf.votedFor = rf.me
 			rf.votedSupport = 1
 			rf.persist()
-			fmt.Printf("[++++ elect ++++]: Rf[%v] send a election\n", rf.me)
+			// fmt.Printf("[++++ elect ++++]: Rf[%v] send a election\n", rf.me)
 			rf.votedTime = time.Now()
 			rf.candidateRequestVote()
 		}
@@ -619,7 +620,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	}
 	rf.logs = append(rf.logs, LogEntry{Term: rf.currentTerm, Command: command})
 	rf.persist()
-	return len(rf.logs), rf.currentTerm, true
+	return rf.getLastIndex(), rf.currentTerm, true
 }
 
 func (rf *Raft) Kill() {
