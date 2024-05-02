@@ -79,7 +79,7 @@ func (rf *Raft) restoreLogTerm(curIndex int) int {
 	return rf.restoreLog(curIndex).Term
 }
 
-// 获取最后的快照日志的index(代表已存储）
+// 获取最后的真实日志的index(加上快照中存储的）
 func (rf *Raft) getLastIndex() int {
 	return len(rf.logs) + rf.lastIncludeIndex
 }

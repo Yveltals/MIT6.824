@@ -193,7 +193,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 // leader 根据 nextIndex 无限重发未同步日志，附带心跳作用
 // 1.自己过时了，转为 follower
 // 2.更新 commitIndex 和 nextIndex
-func (rf *Raft) leaderAppendEntries() {
+func (rf *Raft) LeaderAppendEntries() {
 	for index := range rf.peers {
 		if index == rf.me {
 			continue
@@ -487,7 +487,7 @@ func (rf *Raft) appendTicker() {
 		rf.mu.Lock()
 		if rf.status == Leader {
 			rf.mu.Unlock()
-			rf.leaderAppendEntries()
+			rf.LeaderAppendEntries()
 		} else {
 			rf.mu.Unlock()
 		}
@@ -584,6 +584,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		return -1, -1, false
 	}
 	rf.logs = append(rf.logs, LogEntry{Term: rf.currentTerm, Command: command})
+	rf.LeaderAppendEntries() // for lab3a TestSpeed
 	rf.persist()
 	return rf.getLastIndex(), rf.currentTerm, true
 }
