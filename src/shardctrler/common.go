@@ -36,6 +36,8 @@ type Err string
 
 type JoinArgs struct {
 	Servers map[int][]string // new GID -> servers mappings
+	SeqId   int
+	CkId    int64
 }
 
 type JoinReply struct {
@@ -44,7 +46,9 @@ type JoinReply struct {
 }
 
 type LeaveArgs struct {
-	GIDs []int
+	GIDs  []int
+	SeqId int
+	CkId  int64
 }
 
 type LeaveReply struct {
@@ -55,6 +59,8 @@ type LeaveReply struct {
 type MoveArgs struct {
 	Shard int
 	GID   int
+	SeqId int
+	CkId  int64
 }
 
 type MoveReply struct {
@@ -63,11 +69,22 @@ type MoveReply struct {
 }
 
 type QueryArgs struct {
-	Num int // desired config number
+	Num   int // desired config number
+	SeqId int
+	CkId  int64
 }
 
 type QueryReply struct {
 	WrongLeader bool
 	Err         Err
 	Config      Config
+}
+
+func IsInGroup(x int, groups []int) bool {
+	for _, gid := range groups {
+		if x == gid {
+			return true
+		}
+	}
+	return false
 }
